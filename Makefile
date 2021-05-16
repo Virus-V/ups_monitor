@@ -1,9 +1,9 @@
 PROG = helloworld
 
-CFLAGS += -I. -Iusb -Icjson -lusb -lpthread
+CFLAGS += -I. -I/usr/local/include -L/usr/local/lib -Iusb -Icjson -lusb -lpthread -lmosquitto
 
 SRCS != find usb cjson -name "*.c"
-SRCS += main.c
+SRCS += main.c mqtt_pub.c
 OBJS := $(SRCS:S/.c/.o/g)
 
 $(PROG): $(OBJS)
