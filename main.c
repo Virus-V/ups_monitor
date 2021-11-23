@@ -223,12 +223,14 @@ static void *mqtt_thread_fun(void *vargp) {
     }
 
     /* publish via mqtt */
-    // printf("update: %s\n", json_str);
+    printf("update: %s\n", json_str);
+    #if 0
     ret = report_to_houston("home/nj/pukou/power/shanke", 0, json_str,
                             strlen(json_str));
     if (ret < 0) {
       syslog(LOG_WARNING, "report ups status failed: %s", json_str);
     }
+    #endif
 
     free(json_str);
   end:
@@ -252,11 +254,13 @@ int main(void) {
 
   signal(SIGINT, sig_handler); // Register signal handler
 
+#if 0
   ret = mqtt_init();
   if (ret < 0) {
     syslog(LOG_ERR, "Can't init MQTT.");
     return -1;
   }
+#endif
 
   usbObj = CreateUSB();
   if (usbObj == NULL) {
@@ -359,7 +363,9 @@ _exit:
   USB_Close(usbObj);
   DestoryUSB(&usbObj);
 
+#if 0
   mqtt_deinit();
+#endif
 
   sem_close(&update_sem);
   pthread_mutex_destroy(&fields_mutex);
