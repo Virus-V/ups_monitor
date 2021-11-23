@@ -39,7 +39,7 @@ static int cypress_command(const char *cmd, char *buf, size_t buflen) {
     /* ret = usb->set_report(udev, 0, (unsigned char *)&tmp[i], 8); */
     ret = USB_ControlTransfer(
         usbObj, USB_ENDPOINT_OUT + USB_TYPE_CLASS + USB_RECIP_INTERFACE, 0x09,
-        0x200, 0, &tmp[i], 8, 5000, &count);
+        0x200, 0, &tmp[i], 8, 50000, &count);
     if (ret != USB_SUCCESS) {
       syslog(LOG_ERR, "Write control message failed");
       return -1;
@@ -54,8 +54,8 @@ static int cypress_command(const char *cmd, char *buf, size_t buflen) {
 
     /* Read data in 8-byte chunks */
     /* ret = usb->get_interrupt(udev, (unsigned char *)&buf[i], 8, 1000); */
-    // ret = USB_InterruptTransfer(usbObj, 0x81, &buf[i], 8, 1000, &count);
-    ret = usbObj->Read(usbObj, &buf[i], 8, 1000, &count);
+    // ret = USB_InterruptTransfer(usbObj, 0x81, &buf[i], 8, 50000, &count);
+    ret = usbObj->Read(usbObj, &buf[i], 8, 50000, &count);
 
     /*
      * Any errors here mean that we are unable to read a reply (which

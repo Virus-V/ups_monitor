@@ -55,12 +55,12 @@
 #ifdef true
 #undef true
 #endif
-#define true((cJSON_bool)1)
+#define true ((cJSON_bool)1)
 
 #ifdef false
 #undef false
 #endif
-#define false((cJSON_bool)0)
+#define false ((cJSON_bool)0)
 
 static unsigned char *cJSONUtils_strdup(const unsigned char *const string) {
   size_t length = 0;

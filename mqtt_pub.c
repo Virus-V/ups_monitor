@@ -95,7 +95,7 @@ int mqtt_init(void) {
    * This call makes the socket connection only, it does not complete the MQTT
    * CONNECT/CONNACK flow, you should use mosquitto_loop_start() or
    * mosquitto_loop_forever() for processing net traffic. */
-  rc = mosquitto_connect(mosq, "houston", 1883, 60);
+  rc = mosquitto_connect(mosq, "192.168.1.137", 1883, 60);
   if (rc != MOSQ_ERR_SUCCESS) {
     mosquitto_destroy(mosq);
     syslog(LOG_ERR, "Error: %s\n", mosquitto_strerror(rc));
