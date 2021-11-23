@@ -19,6 +19,8 @@
 
 USB usbObj;
 
+#define DISABLE_MQTT
+
 extern int mqtt_init(void);
 extern int mqtt_deinit(void);
 extern int report_to_houston(const char *topic, int qos,
@@ -222,15 +224,16 @@ static void *mqtt_thread_fun(void *vargp) {
       goto end;
     }
 
-    /* publish via mqtt */
+#ifdef DISABLE_MQTT
     printf("update: %s\n", json_str);
-    #if 0
+#else
+    /* publish via mqtt */
     ret = report_to_houston("home/nj/pukou/power/shanke", 0, json_str,
                             strlen(json_str));
     if (ret < 0) {
       syslog(LOG_WARNING, "report ups status failed: %s", json_str);
     }
-    #endif
+#endif
 
     free(json_str);
   end:
@@ -254,7 +257,7 @@ int main(void) {
 
   signal(SIGINT, sig_handler); // Register signal handler
 
-#if 0
+#ifndef DISABLE_MQTT
   ret = mqtt_init();
   if (ret < 0) {
     syslog(LOG_ERR, "Can't init MQTT.");
@@ -363,7 +366,7 @@ _exit:
   USB_Close(usbObj);
   DestoryUSB(&usbObj);
 
-#if 0
+#ifndef DISABLE_MQTT
   mqtt_deinit();
 #endif
 
