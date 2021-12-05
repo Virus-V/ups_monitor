@@ -20,6 +20,7 @@
 USB usbObj;
 
 //#define DISABLE_MQTT
+#define REFREASH_INTERVAL 30
 
 extern int mqtt_init(void);
 extern int mqtt_deinit(void);
@@ -199,7 +200,7 @@ static void *mqtt_thread_fun(void *vargp) {
 
     pthread_mutex_lock(&fields_mutex);
     for (i = 0; status_list[i].name != NULL; i++) {
-      if ((status_list[i].flags & SF_FLAGS_UPDATED) == 0 && cnt < 100) {
+      if ((status_list[i].flags & SF_FLAGS_UPDATED) == 0 && cnt < REFREASH_INTERVAL) {
         continue;
       }
       status_list[i].flags &= ~SF_FLAGS_UPDATED;
@@ -225,7 +226,7 @@ static void *mqtt_thread_fun(void *vargp) {
     }
 
     /* 每间隔100个消息，就更新全部的字段 */
-    if (cnt++ >= 100) {
+    if (cnt++ >= REFREASH_INTERVAL) {
       cnt = 0;
     }
 
