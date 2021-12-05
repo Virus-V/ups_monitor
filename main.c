@@ -225,7 +225,7 @@ static void *mqtt_thread_fun(void *vargp) {
     }
 
     /* 每间隔100个消息，就更新全部的字段 */
-    if (cnt++ > 100) {
+    if (cnt++ >= 100) {
       cnt = 0;
     }
 
