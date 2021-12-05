@@ -183,7 +183,7 @@ static void sig_handler(int signum) {
 }
 
 static void *mqtt_thread_fun(void *vargp) {
-  int i, ret;
+  int i, ret, cnt = 0;
   cJSON *root;
   char *json_str;
 
@@ -199,7 +199,7 @@ static void *mqtt_thread_fun(void *vargp) {
 
     pthread_mutex_lock(&fields_mutex);
     for (i = 0; status_list[i].name != NULL; i++) {
-      if ((status_list[i].flags & SF_FLAGS_UPDATED) == 0) {
+      if ((status_list[i].flags & SF_FLAGS_UPDATED) == 0 && cnt < 100) {
         continue;
       }
       status_list[i].flags &= ~SF_FLAGS_UPDATED;
@@ -222,6 +222,11 @@ static void *mqtt_thread_fun(void *vargp) {
     if (json_str == NULL) {
       syslog(LOG_ERR, "make json string failed.");
       goto end;
+    }
+
+    /* 每间隔100个消息，就更新全部的字段 */
+    if (cnt++ > 100) {
+      cnt = 0;
     }
 
 #ifdef DISABLE_MQTT
@@ -261,21 +266,21 @@ int main(void) {
   ret = mqtt_init();
   if (ret < 0) {
     syslog(LOG_ERR, "Can't init MQTT.");
-    return -1;
+    goto _exit_1;
   }
 #endif
 
   usbObj = CreateUSB();
   if (usbObj == NULL) {
     syslog(LOG_ERR, "Create USB object failed!");
-    return 1;
+    goto _exit_2;
   }
 
   // 连接vid:pid-> 0x0665, 0x5161
   ret = USB_Open(usbObj, 0x0665, 0x5161, NULL);
   if (ret != USB_SUCCESS) {
     syslog(LOG_ERR, "Cant open USB device");
-    return 1;
+    goto _exit_3;
   }
 
   syslog(LOG_INFO, "connect usb success! reseting usb..");
@@ -284,13 +289,13 @@ int main(void) {
   ret = USB_SetConfiguration(usbObj, 0); // 使用第一个configuration
   if (ret != USB_SUCCESS) {
     syslog(LOG_ERR, "cant set configuration");
-    goto _exit;
+    goto _exit_3;
   }
 
   ret = USB_ClaimInterface(usbObj, 3, 0, 0, 3);
   if (ret != USB_SUCCESS) {
     syslog(LOG_ERR, "claim usb interface faild.");
-    goto _exit;
+    goto _exit_3;
   }
 
   /* 获得Rating信息 */
@@ -305,7 +310,7 @@ int main(void) {
     if (buf[0] != '#') {
       syslog(LOG_ERR, "bad rating response format!");
       ret = 1;
-      goto _exit;
+      goto _exit_3;
     }
 
     parse_fields(buf + 1, " ", rating_list);
@@ -315,16 +320,17 @@ int main(void) {
   // 打开led设备
   int ledfd = open("/dev/led/nanopi:blue:status", O_WRONLY | O_SYNC);
   if (ledfd <= 0) {
-    syslog(LOG_ERR, "open led dev failed! %m.");
+    syslog(LOG_ERR, "open led dev failed!.");
     ret = errno;
-    goto _exit;
+    goto _exit_3;
   }
 
   ret = pthread_create(&mqtt_thread, NULL, mqtt_thread_fun, NULL);
   if (ret < 0) {
     syslog(LOG_ERR, "start mqtt thread failed! %m.");
     ret = errno;
-    goto _exit;
+
+    goto _exit_4;
   }
 
   while (exit_flag == 0) {
@@ -341,7 +347,7 @@ int main(void) {
     if (buf[0] != '(') {
       syslog(LOG_ERR, "bad status response format!");
       ret = 1;
-      goto _exit;
+      goto _exit_5;
     }
 
     /* parse status */
@@ -356,23 +362,28 @@ int main(void) {
     sleep(1);
   }
 
-  syslog(LOG_INFO, "monitor exit.");
-  close(ledfd);
-
+_exit_5:
+  exit_flag = 1;
   sem_post(&update_sem);
   pthread_join(mqtt_thread, NULL);
 
-_exit:
+_exit_4:
+  close(ledfd);
+
+_exit_3:
   USB_Close(usbObj);
   DestoryUSB(&usbObj);
 
 #ifndef DISABLE_MQTT
+_exit_2:
   mqtt_deinit();
 #endif
 
+_exit_1:
   sem_close(&update_sem);
   pthread_mutex_destroy(&fields_mutex);
 
+  syslog(LOG_INFO, "monitor exit.");
   closelog();
   return ret;
 }
