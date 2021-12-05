@@ -19,7 +19,7 @@
 
 USB usbObj;
 
-#define DISABLE_MQTT
+//#define DISABLE_MQTT
 
 extern int mqtt_init(void);
 extern int mqtt_deinit(void);
@@ -374,8 +374,8 @@ _exit_3:
   USB_Close(usbObj);
   DestoryUSB(&usbObj);
 
-#ifndef DISABLE_MQTT
 _exit_2:
+#ifndef DISABLE_MQTT
   mqtt_deinit();
 #endif
 
