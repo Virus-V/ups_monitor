@@ -8,6 +8,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <syslog.h>
+#include <time.h>
 #include <unistd.h> //for sleep
 
 #include "cjson/cJSON.h"
@@ -187,6 +188,7 @@ static void *mqtt_thread_fun(void *vargp) {
   int i, ret, cnt = 0;
   cJSON *root;
   char *json_str;
+  time_t timestamp;
 
   /* 将变化的数据通过mqtt发布 */
   while (exit_flag == 0) {
@@ -195,6 +197,13 @@ static void *mqtt_thread_fun(void *vargp) {
     root = cJSON_CreateObject();
     if (root == NULL) {
       syslog(LOG_WARNING, "failed to create json object.");
+      continue;
+    }
+
+    /* add timestamp */
+    timestamp = time(NULL);
+    if (cJSON_AddNumberToObject(root, "timestamp", (double)timestamp) == NULL) {
+      cJSON_Delete(root);
       continue;
     }
 
