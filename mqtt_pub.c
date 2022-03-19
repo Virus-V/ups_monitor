@@ -69,6 +69,7 @@ int report_to_houston(const char *topic, int qos, const unsigned char *data,
   return 0;
 }
 
+/* init mqtt */
 int mqtt_init(void) {
   int rc;
 
@@ -83,7 +84,7 @@ int mqtt_init(void) {
    */
   mosq = mosquitto_new(NULL, true, NULL);
   if (mosq == NULL) {
-    syslog(LOG_ERR, "Error: Out of memory.\n");
+    syslog(LOG_ERR, "Error: Out of memory.");
     return -ENOMEM;
   }
 
@@ -95,10 +96,10 @@ int mqtt_init(void) {
    * This call makes the socket connection only, it does not complete the MQTT
    * CONNECT/CONNACK flow, you should use mosquitto_loop_start() or
    * mosquitto_loop_forever() for processing net traffic. */
-  rc = mosquitto_connect(mosq, "192.168.1.137", 1883, 60);
+  rc = mosquitto_connect(mosq, "192.168.1.1", 1883, 60);
   if (rc != MOSQ_ERR_SUCCESS) {
     mosquitto_destroy(mosq);
-    syslog(LOG_ERR, "Error: %s\n", mosquitto_strerror(rc));
+    syslog(LOG_ERR, "Error: %s", mosquitto_strerror(rc));
     return -ENOTCONN;
   }
 
@@ -106,18 +107,24 @@ int mqtt_init(void) {
   rc = mosquitto_loop_start(mosq);
   if (rc != MOSQ_ERR_SUCCESS) {
     mosquitto_destroy(mosq);
-    syslog(LOG_ERR, "Error: %s\n", mosquitto_strerror(rc));
+    syslog(LOG_ERR, "Error: %s", mosquitto_strerror(rc));
     return -ENOSYS;
   }
 
   return 0;
 }
 
-int mqtt_deinit(void) {
+int
+mqtt_deinit(void)
+{
   assert(mosq != NULL);
 
+  /* disable auto reconnect */
   mosquitto_disconnect(mosq);
+
   mosquitto_destroy(mosq);
+
+  mosq = NULL;
 
   mosquitto_lib_cleanup();
   return 0;

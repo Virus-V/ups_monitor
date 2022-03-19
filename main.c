@@ -28,7 +28,9 @@ extern int mqtt_deinit(void);
 extern int report_to_houston(const char *topic, int qos,
                              const unsigned char *data, size_t length);
 
-static int cypress_command(const char *cmd, char *buf, size_t buflen) {
+static int
+cypress_command(const char *cmd, char *buf, size_t buflen)
+{
   char tmp[128];
   int ret;
   size_t i;
@@ -87,7 +89,9 @@ union value {
   unsigned long int val_int;
 };
 
-static int conv_strtod(const char *str, union value *val) {
+static int
+conv_strtod(const char *str, union value *val)
+{
   char *last = NULL;
   assert(val != NULL);
 
@@ -99,7 +103,9 @@ static int conv_strtod(const char *str, union value *val) {
   return 0;
 }
 
-static int conv_strtobin(const char *str, union value *val) {
+static int
+conv_strtobin(const char *str, union value *val)
+{
   int i;
   unsigned int bits = 0;
   assert(val != NULL);
@@ -144,7 +150,9 @@ struct ups_field rating_list[] = {
     {"input_frequency_nominal", VTYPE_DOUBLE, {0.0}, conv_strtod, 0},
     {NULL, VTYPE_DOUBLE, {0.0}, NULL, 0}};
 
-static int parse_fields(char *str, const char *sep, struct ups_field *fields) {
+static int
+parse_fields(char *str, const char *sep, struct ups_field *fields)
+{
   char *tmp_str = str;
   char *curr_field, *last = NULL;
   int i, update_flag_cnt = 0;
@@ -184,11 +192,24 @@ static void sig_handler(int signum) {
   exit_flag = 1;
 }
 
-static void *mqtt_thread_fun(void *vargp) {
+/* 状态和控制线程 */
+static void *
+proc_entry_control_status_thread(void *vargp)
+{
   int i, ret, cnt = 0;
   cJSON *root;
   char *json_str;
   time_t timestamp;
+
+#ifndef DISABLE_MQTT
+  ret = mqtt_init();
+  if (ret < 0) {
+    syslog(LOG_ERR, "Can't init MQTT.");
+    exit_flag = 1;
+
+    return NULL;
+  }
+#endif
 
   /* 将变化的数据通过mqtt发布 */
   while (exit_flag == 0) {
@@ -255,13 +276,20 @@ static void *mqtt_thread_fun(void *vargp) {
     pthread_mutex_unlock(&fields_mutex);
     cJSON_Delete(root);
   }
+
+#ifndef DISABLE_MQTT
+  mqtt_deinit();
+#endif
+
   return NULL;
 }
 
-int main(void) {
+int
+main(void)
+{
   int ret;
   char buf[128];
-  pthread_t mqtt_thread;
+  pthread_t control_status_thread;
 
   openlog("ups_monitord", LOG_PID | LOG_NDELAY | LOG_CONS, LOG_CONSOLE);
   // setlogmask(LOG_UPTO(LOG_ERR));
@@ -272,25 +300,17 @@ int main(void) {
 
   signal(SIGINT, sig_handler); // Register signal handler
 
-#ifndef DISABLE_MQTT
-  ret = mqtt_init();
-  if (ret < 0) {
-    syslog(LOG_ERR, "Can't init MQTT.");
-    goto _exit_1;
-  }
-#endif
-
   usbObj = CreateUSB();
   if (usbObj == NULL) {
     syslog(LOG_ERR, "Create USB object failed!");
-    goto _exit_2;
+    goto _exit_1;
   }
 
   // 连接vid:pid-> 0x0665, 0x5161
   ret = USB_Open(usbObj, 0x0665, 0x5161, NULL);
   if (ret != USB_SUCCESS) {
     syslog(LOG_ERR, "Cant open USB device");
-    goto _exit_3;
+    goto _exit_1;
   }
 
   syslog(LOG_INFO, "connect usb success! reseting usb..");
@@ -299,13 +319,13 @@ int main(void) {
   ret = USB_SetConfiguration(usbObj, 0); // 使用第一个configuration
   if (ret != USB_SUCCESS) {
     syslog(LOG_ERR, "cant set configuration");
-    goto _exit_3;
+    goto _exit_2;
   }
 
   ret = USB_ClaimInterface(usbObj, 3, 0, 0, 3);
   if (ret != USB_SUCCESS) {
     syslog(LOG_ERR, "claim usb interface faild.");
-    goto _exit_3;
+    goto _exit_2;
   }
 
   /* 获得Rating信息 */
@@ -320,7 +340,7 @@ int main(void) {
     if (buf[0] != '#') {
       syslog(LOG_ERR, "bad rating response format!");
       ret = 1;
-      goto _exit_3;
+      goto _exit_2;
     }
 
     parse_fields(buf + 1, " ", rating_list);
@@ -332,15 +352,15 @@ int main(void) {
   if (ledfd <= 0) {
     syslog(LOG_ERR, "open led dev failed!.");
     ret = errno;
-    goto _exit_3;
+    goto _exit_2;
   }
 
-  ret = pthread_create(&mqtt_thread, NULL, mqtt_thread_fun, NULL);
+  ret = pthread_create(&control_status_thread, NULL, proc_entry_control_status_thread, NULL);
   if (ret < 0) {
     syslog(LOG_ERR, "start mqtt thread failed! %m.");
     ret = errno;
 
-    goto _exit_4;
+    goto _exit_3;
   }
 
   while (exit_flag == 0) {
@@ -356,8 +376,8 @@ int main(void) {
 
     if (buf[0] != '(') {
       syslog(LOG_ERR, "bad status response format!");
-      ret = 1;
-      goto _exit_5;
+      exit_flag = 1;
+      continue;
     }
 
     /* parse status */
@@ -372,22 +392,16 @@ int main(void) {
     sleep(1);
   }
 
-_exit_5:
-  exit_flag = 1;
+  syslog(LOG_INFO, "Waiting thread exit..");
   sem_post(&update_sem);
-  pthread_join(mqtt_thread, NULL);
-
-_exit_4:
-  close(ledfd);
+  pthread_join(control_status_thread, NULL);
 
 _exit_3:
-  USB_Close(usbObj);
-  DestoryUSB(&usbObj);
+  close(ledfd);
 
 _exit_2:
-#ifndef DISABLE_MQTT
-  mqtt_deinit();
-#endif
+  USB_Close(usbObj);
+  DestoryUSB(&usbObj);
 
 _exit_1:
   sem_close(&update_sem);
@@ -395,5 +409,5 @@ _exit_1:
 
   syslog(LOG_INFO, "monitor exit.");
   closelog();
-  return ret;
+  return 0;
 }
