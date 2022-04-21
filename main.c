@@ -230,9 +230,12 @@ proc_entry_control_status_thread(void *vargp)
 
     pthread_mutex_lock(&fields_mutex);
     for (i = 0; status_list[i].name != NULL; i++) {
+      /* update all field */
+#if 0
       if ((status_list[i].flags & SF_FLAGS_UPDATED) == 0 && cnt < REFREASH_INTERVAL) {
         continue;
       }
+#endif
       status_list[i].flags &= ~SF_FLAGS_UPDATED;
 
       if (status_list[i].type == VTYPE_DOUBLE) {
